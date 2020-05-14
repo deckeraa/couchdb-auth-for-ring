@@ -123,7 +123,6 @@
 (defn login-handler [req]
   (try
     (let [params (get-body req)
-          _ (println "Login request for " (:user params))
           resp (http/post (str couch-url "/_session") {:as :json
                                                     :content-type :json
                                                     :form-params {:name     (:user params)
@@ -142,7 +141,6 @@
   (try
     (let [params (get-body req)
           name (:user params)]
-      (println "create-user-handler: " params)
       (if (nil? (re-find #"^\w+$" name)) ; sanitize the name
         (assoc (json-response :invalid-user-name) :status 400)
         (let [resp (http/put
@@ -154,7 +152,6 @@
                                    :password (:pass params)
                                    :roles []
                                    :type :user}})]
-          (println "create-user resp: " resp)
           (if (= 201 (:status resp))
             (do
               (let [login-resp (http/post (str couch-url "/_session") {:as :json
