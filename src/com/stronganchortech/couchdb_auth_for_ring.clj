@@ -1,4 +1,4 @@
-(ns couchdb-auth-for-ring.core
+(ns com.stronganchortech.couchdb-auth-for-ring
   (:require [clojure.test :refer [deftest is run-tests]]
             [clojure.data.json :as json]
             [clojure.walk :refer [keywordize-keys]]
