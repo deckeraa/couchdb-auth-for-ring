@@ -11,6 +11,11 @@
 ;; TODO before library release
 ;; - support url configuration through environment variables
 ;; - implement password handling for create-user-handler via environment variables
+;; - change strict/secure settings
+
+(def couch-url (or (System/getenv "COUCHDB_AUTH_FOR_RING_DB_URL") "http://localhost:5984"))
+(def couch-username (System/getenv "COUCHDB_AUTH_FOR_RING_DB_USERNAME"))
+(def couch-password (System/getenv "COUCHDB_AUTH_FOR_RING_DB_PASSWORD"))
 
 (defn get-body [req]
   (-> req
@@ -31,7 +36,7 @@
          (map (fn [[cookie-name v]]
                 (let [v (select-keys v [:value :domain :path :secure :http-only :max-age :same-site :expires])]
                   (if (:expires v)
-                    {cookie-name (update v :expires #(.toString %))} ;; the :expires attr also needs changed frmo a java.util.Date to a string
+                    {cookie-name (update v :expires #(.toString %))} ;; the :expires attr needs changed from a java.util.Date to a string
                     {cookie-name v})))
               cookies)))
 
@@ -67,10 +72,10 @@
        CouchDB will give you a new cookie."
   [cookie-value]
   (let [
-        resp (http/get "http://localhost:5984/_session" {:as :json
-                                                         :headers {"Cookie" (str "AuthSession=" cookie-value)}
-                                                         :content-type :json
-                                                         })]
+        resp (http/get (str couch-url "/_session") {:as :json
+                                                 :headers {"Cookie" (str "AuthSession=" cookie-value)}
+                                                 :content-type :json
+                                                 })]
     (if (nil? (get-in resp [:body :userCtx :name]))
       false
       [(get-in resp [:body :userCtx])
@@ -121,10 +126,10 @@
   (try
     (let [params (get-body req)
           _ (println "Login request for " (:user params))
-          resp (http/post "http://localhost:5984/_session" {:as :json
-                                                            :content-type :json
-                                                            :form-params {:name     (:user params)
-                                                                          :password (:pass params)}})]
+          resp (http/post (str couch-url "/_session") {:as :json
+                                                    :content-type :json
+                                                    :form-params {:name     (:user params)
+                                                                  :password (:pass params)}})]
       (assoc 
        (json-response {:name (get-in resp [:body :name]) :roles (get-in resp [:body :roles])})
        :cookies (as-> (:cookies resp) $
@@ -143,7 +148,7 @@
       (if (nil? (re-find #"^\w+$" name)) ; sanitize the name
         (assoc (json-response :invalid-user-name) :status 400)
         (let [resp (http/put
-                    (str "http://localhost:5984/_users/org.couchdb.user:" name)
+                    (str couch-url "/_users/org.couchdb.user:" name)
                     {:as :json
                                         ;                     :basic-auth [(:username db) (:password db)]
                      :basic-auth ["admin" "test"] ;; TODO actual password management
@@ -155,10 +160,10 @@
           (println "create-user resp: " resp)
           (if (= 201 (:status resp))
             (do
-              (let [login-resp (http/post "http://localhost:5984/_session" {:as :json
-                                                            :content-type :json
-                                                            :form-params {:name     (:user params)
-                                                                          :password (:pass params)}})]
+              (let [login-resp (http/post (str couch-url "/_session") {:as :json
+                                                                    :content-type :json
+                                                                    :form-params {:name     (:user params)
+                                                                                  :password (:pass params)}})]
                 (assoc 
                  (json-response true)
                  :cookies (remove-cookie-attrs-not-supported-by-ring (:cookies login-resp)) ;; set the CouchDB cookie on the ring response
@@ -174,19 +179,19 @@
     (let [params (get-body req)
           cookie-value (get-in req [:cookies "AuthSession" :value])]
       (let [old-user
-            (:body (http/get (str "http://localhost:5984/_users/org.couchdb.user:" username)
+            (:body (http/get (str couch-url "/_users/org.couchdb.user:" username)
                              {:as :json
                               :headers {"Cookie" (str "AuthSession=" cookie-value)}}))
             new-user (as-> old-user $
                        (assoc $ :password (:pass params)))]
         ;; change the password and then re-authenticate since the old cookie is no longer considered valid by CouchDB
         (let [change-resp
-              (http/put (str "http://localhost:5984/_users/org.couchdb.user:" username)
+              (http/put (str couch-url "/_users/org.couchdb.user:" username)
                         {:as :json
                          :headers {"Cookie" (str "AuthSession=" cookie-value)}
                          :content-type :json
                          :form-params new-user})
-              new-login (http/post "http://localhost:5984/_session"
+              new-login (http/post (str couch-url "/_session")
                                    {:as :json
                                     :content-type :json
                                     :form-params {:name     username
@@ -201,7 +206,7 @@
 
 (defn logout-handler [req username roles]
   (try
-    (let [resp (http/delete "http://localhost:5984/_session" {:as :json})]
+    (let [resp (http/delete (str couch-url "/_session") {:as :json})]
       (assoc 
        (json-response {:logged-out true})
        :cookies (remove-cookie-attrs-not-supported-by-ring (:cookies resp)) ;; set the CouchDB cookie on the ring response
