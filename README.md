@@ -156,6 +156,15 @@ TODO diagram
 Check to make sure you are using the [wrap-cookies][https://github.com/ring-clojure/ring/wiki/Cookies] middleware.
 If wrap-cookies is not used, Ring will not send back cookies, even though the handlers are setting the :cookies key.
 
+### I recieve a 401 exception containing `{"error":"unauthorized","reason":"Name or password is incorrect."}` when trying to create a user.
+That means that the admin username or admin password being passed to CouchDB is incorrect.
+To fix this, first name sure that you set the environment variables:
+```
+export COUCHDB_AUTH_FOR_RING_DB_USERNAME="YOUR_COUCHDB_ADMIN_USERNAME"
+export COUCHDB_AUTH_FOR_RING_DB_PASSWORD="YOUR_COUCHDB_ADMIN_PASSWORD"
+```
+If this does not fix it, verify that the CouchDB user is an admin user. [CouchDB Security Guide][https://docs.couchdb.org/en/latest/intro/security.html]
+
 ## License
 
 Copyright © 2020 Aaron Decker

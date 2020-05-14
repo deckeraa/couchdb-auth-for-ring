@@ -9,8 +9,6 @@
 
 
 ;; TODO before library release
-;; - support url configuration through environment variables
-;; - implement password handling for create-user-handler via environment variables
 ;; - change strict/secure settings
 
 (def couch-url (or (System/getenv "COUCHDB_AUTH_FOR_RING_DB_URL") "http://localhost:5984"))
@@ -150,8 +148,7 @@
         (let [resp (http/put
                     (str couch-url "/_users/org.couchdb.user:" name)
                     {:as :json
-                                        ;                     :basic-auth [(:username db) (:password db)]
-                     :basic-auth ["admin" "test"] ;; TODO actual password management
+                     :basic-auth [couch-username couch-password]
                      :content-type :json
                      :form-params {:name     name
                                    :password (:pass params)
