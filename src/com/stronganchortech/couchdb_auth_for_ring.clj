@@ -10,7 +10,6 @@
 
 ;; TODO before library release
 ;; - support url configuration through environment variables
-;; - test cookie-check-handler
 ;; - implement password handling for create-user-handler via environment variables
 
 (defn get-body [req]

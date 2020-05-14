@@ -74,9 +74,8 @@ Hello admin, only logged-in users can see this.
 ```
 
 3) (Optional) Have clients call the refresh handler `endpoint` to get a new cookie and stayed logged-in for longer than the CouchDB session timeout.
-
 ```
-curl -v localhost:3000/refresh -H "Cookie: AuthSession=YWRtaW46NUVCRDIzNjk6yaHN78pyCRvwcpGlyrczoI-yXWo"
+curl -v localhost:3000/refresh -H "Cookie: AuthSession=YWRtaW46NUVCREE5Njg6bQrqOSQG3P2RmPgGcV_V2Uz_Byc"
 *   Trying 127.0.0.1...
 * TCP_NODELAY set
 * Connected to localhost (127.0.0.1) port 3000 (#0)
@@ -84,11 +83,12 @@ curl -v localhost:3000/refresh -H "Cookie: AuthSession=YWRtaW46NUVCRDIzNjk6yaHN7
 > Host: localhost:3000
 > User-Agent: curl/7.58.0
 > Accept: */*
-> Cookie: AuthSession=YWRtaW46NUVCRDIzNjk6yaHN78pyCRvwcpGlyrczoI-yXWo
+> Cookie: AuthSession=YWRtaW46NUVCREE5Njg6bQrqOSQG3P2RmPgGcV_V2Uz_Byc
 > 
 < HTTP/1.1 200 OK
-< Date: Thu, 14 May 2020 11:17:07 GMT
+< Date: Thu, 14 May 2020 20:27:25 GMT
 < Content-Type: application/json
+< Set-Cookie: AuthSession=YWRtaW46NUVCREE5QUQ6njVjXHZDb9syVsxTQCr4PyZrpnw;Path=/;Expires=Thu May 14 15:33:25 CDT 2020
 < Content-Length: 35
 < Server: Jetty(9.4.12.v20180830)
 < 
