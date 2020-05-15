@@ -15,7 +15,7 @@ This has the following advantages:
 It also has the following caveats:
 # User management is handled entirely in CouchDB.
   - There is only one _users database per CouchDB install. This means you can't setup different users on a per-database basis. There are workarounds to this such as creating user roles that have different database access.
-  - [Cookie timeout][https://docs.couchdb.org/en/latest/config/auth.html#config-couch-httpd-auth] is configured per CouchDB install. `couchdb-auth-for-ring` supplies client code TODO that you can place in your scripts to have clients refresh their cookies.
+  - [Cookie timeout][https://docs.couchdb.org/en/latest/config/auth.html#config-couch-httpd-auth] is configured per CouchDB install. `couchdb-auth-for-ring` provides a token refresh endpoint that clients can use to avoid the cookie timeout.
 
 ## Usage
 
@@ -27,7 +27,13 @@ In your project.clj:
  [com.stronganchortech/couchdb-auth-for-ring "0.1.0-SNAPSHOT"]  
 ```
 
-1) Issue users the auth cookie using the provided `login-handler`.
+2) Enable insecure http (optional)
+If you are using http and not https in development, be sure to set
+```
+export COUCHDB_AUTH_FOR_RING_SECURE_COOKIE_FLAG=false
+```
+
+3) Issue users the auth cookie using the provided `login-handler`.
 
 Example cURL usage (your username and password will be different):
 
@@ -56,7 +62,7 @@ Note: Unnecessary use of -X or --request, POST is already inferred.
 {"name":"admin","roles":["_admin"]}
 ```
 
-2) Wrap your handlers with wrap-cookie-auth and add the usernames and roles parameters
+4) Wrap your handlers with wrap-cookie-auth and add the usernames and roles parameters
 ```
     ;; (auth/wrap-cookie-auth secret) will return a new function that takes in req
     ;; The handler that you pass into wrap-cookie-auth needs to take in three parameters:
@@ -81,7 +87,7 @@ curl -X POST localhost:3000/secret -H "Content-Type: application/json" --data '{
 Hello admin, only logged-in users can see this.
 ```
 
-3) (Optional) Have clients call the refresh handler `endpoint` to get a new cookie and stayed logged-in for longer than the CouchDB session timeout.
+5) (Optional) Have clients call the refresh handler `endpoint` to get a new cookie and stayed logged-in for longer than the CouchDB session timeout.
 ```
 curl -v localhost:3000/refresh -H "Cookie: AuthSession=YWRtaW46NUVCREE5Njg6bQrqOSQG3P2RmPgGcV_V2Uz_Byc"
 *   Trying 127.0.0.1...
@@ -109,7 +115,7 @@ This is due to the underlying behavior of [_session][https://docs.couchdb.org/en
 
 This handler is also useful for retrieving username and role information for the client.
 
-4) (Optional) Use the provided `logout-handler` to let clients logout.
+6) (Optional) Use the provided `logout-handler` to let clients logout.
 All this does is unset the cookie on the client. CouchDB doesn't have a concept of logging out.
 
 ```
@@ -135,7 +141,7 @@ curl -v -X POST localhost:3000/logout -H "Content-Type: application/json" -H "Co
 {"logged-out":true}
 ```
 
-5) (Optional) Use the provided `create-user-handler` to allow creation of new users.
+7) (Optional) Use the provided `create-user-handler` to allow creation of new users.
 
 ```
 curl localhost:3000/create-user -H "Content-Type: application/json" --data '{"user": "sample_user", "pass": "sample-password"}' -H "Cookie: AuthSession=YWRtaW46NUVCRDIzNjk6yaHN78pyCRvwcpGlyrczoI-yXWo"
@@ -153,7 +159,71 @@ as admins can take, simply wrap create-user-handler and check the roles paramete
 ```
 
 ## Example application
-TODO paste in example app core.clj
+```
+(ns couchdb-auth-for-ring-sample-app.core
+  (:require
+   [com.stronganchortech.couchdb-auth-for-ring :as auth]
+   [ring.middleware.cookies :refer [wrap-cookies]]
+   [ring.adapter.jetty :refer [run-jetty]]))
+
+(defn hello [req]
+  {:status 200
+   :headers {"Content-Type" "text/html"}
+   :body "Hello World"})
+
+    ;; (auth/wrap-cookie-auth secret) will return a new function that takes in req
+    ;; The handler that you pass into wrap-cookie-auth needs to take in three parameters:
+    ;; - req -- the Ring request
+    ;; - username -- the username looked up from CouchDB. This value comes from CouchDB, not the client.
+    ;; - roles -- the roles array looked up from CouchDB. This value comes from CouchDB, not the client. 
+(defn secret [req username roles]
+  (println "secret: " req)
+  {:status 200
+   :headers {"Content-Type" "text/html"}
+   :body (str "Hello " username ", only logged-in users can see this.")})
+
+(defn strict-create-user-handler [req username roles]
+ (if (contains? (set roles) "_admin")
+   (auth/create-user-handler req username roles)
+   (auth/default-not-authorized-fn req)))
+
+(defn simple-router [req]
+  ;; you would probably use bidi or Compojure or another router; I'm making my own for simplicity.
+  (case (:uri req)
+    "/hello" (hello req)
+    "/secret" ((com.stronganchortech.couchdb-auth-for-ring/wrap-cookie-auth secret) req)
+    "/login" (auth/login-handler req)
+    "/refresh" (auth/cookie-check-handler req)
+    "/logout" ((auth/wrap-cookie-auth auth/logout-handler) req)
+    "/create-user" ((auth/wrap-cookie-auth auth/create-user-handler) req)
+    "/strict-create-user" ((auth/wrap-cookie-auth strict-create-user-handler) req)
+    {:status 404 :headers {"Content-Type" "text/html"} :body "Not found."}))
+
+;; wrap-cookies is a required piece of middleware, otherwise Ring won't send up the cookie that
+;; login-handler tries to set.
+(def app (wrap-cookies simple-router))
+```
+## Configuration
+The following environment configuration variables are available:
+- COUCHDB_AUTH_FOR_RING_DB_URL
+  - This defines the URL of the CouchDB instance it connects to.
+  - Default: http://localhost:5984
+- COUCHDB_AUTH_FOR_RING_DB_USERNAME
+  - This is the admin username for use in creating new users. This only needs populated if you plan to use the built-in `create-user-handler`.
+- COUCHDB_AUTH_FOR_RING_DB_PASSWORD
+  - This is the admin password for use in creating new users. This only needs populated if you plan to use the built-in `create-user-handler`.
+- COUCHDB_AUTH_FOR_RING_SECURE_COOKIE_FLAG
+  - This sets the "Secure" (i.e. cookie only gets sent over https) flag.
+  - Default: true
+  - Other options: false
+- COUCHDB_AUTH_FOR_RING_SAME_SITE_COOKIE_FLAG
+  - This sets the "Same-Site" cookie flag.
+  - Default: strict
+  - Other options: lax, none
+- COUCHDB_AUTH_FOR_RING_HTTP_ONLY_COOKIE_FLAG
+  - This sets the "Http-Only" (i.e. Javascript cannot read your cookie) flag.
+  - Default: false
+  - Other options: true
 
 ## How does it work?
 
