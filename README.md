@@ -164,7 +164,25 @@ This is due to the underlying behavior of [_session](https://docs.couchdb.org/en
 
 This handler is also useful for retrieving username and role information for the client.
 
+Here's some sample ClojureScript code that you can use on a client to refresh the cookie every 25 inutes:
+```
+(defn run-cookie-renewer
+  "Creates a recurring call to the server to refresh the authorization cookie."
+  []
+  (js/setTimeout (fn []
+                   (go (let [resp (<! (http/post ("localhost:3000/cookie-check")
+                                                        {:json-params {}
+                                                         :with-credentials true}))]
+                         ;; we don't need to do anything with the response since the browser
+                         ;; stores the new cookie for us.
+                         (run-cookie-renewer))))
+                 (* 25 60 1000)))
+                 
+(auth/run-cookie-renewer)
+```
+
 6. (Optional) Use the provided `logout-handler` to let clients logout.
+
 All this does is unset the cookie on the client. CouchDB doesn't have a concept of logging out.
 
 ```
