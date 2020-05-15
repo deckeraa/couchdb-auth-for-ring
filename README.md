@@ -49,7 +49,7 @@ It also has the following caveats:
   ;; you would probably use bidi or Compojure or another router; I'm making my own for simplicity.
   (case (:uri req)
     "/hello" (hello req)
-    "/secret" ((com.stronganchortech.couchdb-auth-for-ring/wrap-cookie-auth secret) req)
+    "/secret" ((auth/wrap-cookie-auth secret) req)
     "/login" (auth/login-handler req)
     "/refresh" (auth/cookie-check-handler req)
     "/logout" ((auth/wrap-cookie-auth auth/logout-handler) req)
