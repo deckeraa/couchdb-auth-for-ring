@@ -229,10 +229,6 @@ The following environment configuration variables are available:
   - Default: false
   - Other options: true
 
-## How does it work?
-
-TODO diagram
-
 ## Troubleshooting
 ### It's not sending a cookie back.
 Check to make sure you are using the [wrap-cookies](https://github.com/ring-clojure/ring/wiki/Cookies) middleware.
