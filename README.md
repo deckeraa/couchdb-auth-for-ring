@@ -126,12 +126,12 @@ Note: Unnecessary use of -X or --request, POST is already inferred.
 
 Example cURL usage. Without the cookie issued via `login-handler`:
 ```
-curl -X POST localhost:3000/secret -H "Content-Type: application/json" --data '{"user": "admin", "pass":  "test"}'
+curl -X POST localhost:3000/secret -H "Content-Type: application/json"'
 Not authorized
 ```
 With the cookie:
 ```
-curl -X POST localhost:3000/secret -H "Content-Type: application/json" --data '{"user": "admin", "pass":  "test"}' -H "Cookie: AuthSession=YWRtaW46NUVCRDIzNjk6yaHN78pyCRvwcpGlyrczoI-yXWo"
+curl -X POST localhost:3000/secret -H "Content-Type: application/json" -H "Cookie: AuthSession=YWRtaW46NUVCRDIzNjk6yaHN78pyCRvwcpGlyrczoI-yXWo"
 Hello admin, only logged-in users can see this.
 ```
 
