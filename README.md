@@ -62,6 +62,8 @@ It also has the following caveats:
 (def app (wrap-cookies simple-router))
 ```
 
+See [https://github.com/deckeraa/couchdb-auth-for-ring-sample-app].
+
 ## Usage
 
 1. Add the library dependency.
