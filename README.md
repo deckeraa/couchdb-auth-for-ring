@@ -9,7 +9,7 @@ This has the following advantages:
 * User management is handled entirely in CouchDB.
 * Technical details such as password hashword and salting, roles, etc. are all handled by CouchDB.
 * `couchdb-auth-for-ring` is stateless with respect to the Ring server. You can bounce your Ring server and users will still remain logged in, and scaling out to multiple Ring servers is seamless.
-* Your app can be a more secure method for letting clients interact with CouchDB versus having clients connect to CouchDB directly.
+* Avoids having client connect to CouchDB directly, instead routing all requests through your app.
 * Avoids [CORS](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS) issues by allowing you to serve web assets and database assets from the same server.
 
 It also has the following caveats:
