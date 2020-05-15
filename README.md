@@ -19,6 +19,14 @@ It also has the following caveats:
 
 ## Usage
 
+1) Add the library dependency.
+[![Clojars Project](https://img.shields.io/clojars/v/com.stronganchortech/couchdb-auth-for-ring.svg)](https://clojars.org/com.stronganchortech/couchdb-auth-for-ring)
+
+In your project.clj:
+```
+ [com.stronganchortech/couchdb-auth-for-ring "0.1.0-SNAPSHOT"]  
+```
+
 1) Issue users the auth cookie using the provided `login-handler`.
 
 Example cURL usage (your username and password will be different):

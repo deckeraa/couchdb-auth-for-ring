@@ -15,6 +15,30 @@
 (def couch-username (System/getenv "COUCHDB_AUTH_FOR_RING_DB_USERNAME"))
 (def couch-password (System/getenv "COUCHDB_AUTH_FOR_RING_DB_PASSWORD"))
 
+;; use secure (i.e. cookies only get sent over https by default
+;; I considered whether this was overly burdensome on the dev experience since tools like Figwheel
+;; are typically used over http. However, devs will need to set the username and password
+;; environment variables anyhow, so I'm leaning towards having this having the most stringent
+;; default security in prod vs. making dev setup a little easier.
+(def use-secure-cookies? (case (System/getenv "COUCHDB_AUTH_FOR_RING_SECURE_COOKIE_FLAG")
+                           "true" true
+                           "false" false
+                           true))
+
+(def same-site-flag (case (System/getenv "COUCHDB_AUTH_FOR_RING_SAME_SITE_COOKIE_FLAG")
+                      "strict" :strict
+                      "lax"    :lax
+                      "none"   :none
+                      :strict))
+
+;; Friendly reminder: the http-only cookie flag means that Javascript can't read the cookie.
+;; Cookies with http-only set can still be sent over https.
+;; https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie
+(def http-only? (case (System/getenv "COUCHDB_AUTH_FOR_RING_HTTP_ONLY_COOKIE_FLAG")
+                  "true" true
+                  "false" false
+                  false)) ;; off by default because I find it very useful to be able to determine if the user is logged in to my Reagent apps without needing to make a web call. If your Javascript never needs to know about this cookie you can turn it on as an additional security measure.
+
 (defn get-body [req]
   (-> req
       (request/body-string)
@@ -62,6 +86,13 @@
                                     :expires "Fri May 01 18:41:32 CDT 2020"}}
          )))
 
+(defn- process-cookies [cookies]
+  (-> cookies
+      (remove-cookie-attrs-not-supported-by-ring)
+      (set-cookies-flag :same-site same-site-flag)
+      (set-cookies-flag :secure use-secure-cookies?)
+      (set-cookies-flag :http-only http-only?)))
+
 (defn cookie-check
   "Checks the cookies in a request against CouchDB. Returns [{:name :roles} new_cookie] if it's valid, false otherwise.
   Note that
@@ -77,7 +108,7 @@
     (if (nil? (get-in resp [:body :userCtx :name]))
       false
       [(get-in resp [:body :userCtx])
-       (remove-cookie-attrs-not-supported-by-ring (:cookies resp))])))
+       (process-cookies (:cookies resp))])))
 
 (defn cookie-check-from-req
   "Same as cookie-check, but takes in a Ring request rather than a cookie value directly."
@@ -129,11 +160,7 @@
                                                                   :password (:pass params)}})]
       (assoc 
        (json-response {:name (get-in resp [:body :name]) :roles (get-in resp [:body :roles])})
-       :cookies (as-> (:cookies resp) $
-                  (remove-cookie-attrs-not-supported-by-ring $)
-                  ;; (set-cookies-flag $ :secure true)
-                  ;; (set-cookies-flag $ :same-site :strict)
-                 )))
+       :cookies (process-cookies (:cookies resp))))
     (catch Exception e
       (json-response false))))
 
@@ -160,7 +187,7 @@
                                                                                   :password (:pass params)}})]
                 (assoc 
                  (json-response true)
-                 :cookies (remove-cookie-attrs-not-supported-by-ring (:cookies login-resp)) ;; set the CouchDB cookie on the ring response
+                 :cookies (process-cookies (:cookies login-resp)) ;; set the CouchDB cookie on the ring response
                  )))
             (assoc (json-response false) :status 400) ;; don't want to leak any info useful to attackers, no keeping this very non-descript
             ))))
@@ -192,7 +219,7 @@
                                                   :password (:pass params)}})]
           (assoc 
            (json-response true)
-           :cookies (remove-cookie-attrs-not-supported-by-ring (:cookies new-login)) ;; set the CouchDB cookie on the ring response
+           :cookies (process-cookies (:cookies new-login)) ;; set the CouchDB cookie on the ring response
            ))
         ))
     (catch Exception e
@@ -203,7 +230,7 @@
     (let [resp (http/delete (str couch-url "/_session") {:as :json})]
       (assoc 
        (json-response {:logged-out true})
-       :cookies (remove-cookie-attrs-not-supported-by-ring (:cookies resp)) ;; set the CouchDB cookie on the ring response
+       :cookies (process-cookies (:cookies resp))
        )
       )
     (catch Exception e
