@@ -180,15 +180,16 @@
                                    :roles []
                                    :type :user}})]
           (if (= 201 (:status resp))
-            (do
-              (let [login-resp (http/post (str couch-url "/_session") {:as :json
-                                                                    :content-type :json
-                                                                    :form-params {:name     (:user params)
-                                                                                  :password (:pass params)}})]
-                (assoc 
-                 (json-response true)
-                 :cookies (process-cookies (:cookies login-resp)) ;; set the CouchDB cookie on the ring response
-                 )))
+            (let [login-resp (http/post (str couch-url "/_session") {:as :json
+                                                                     :content-type :json
+                                                                     :form-params {:name     (:user params)
+                                                                                   :password (:pass params)}})]
+              ;; *Don't* set the CouchDB cookie on the ring response,
+              ;; since the cookie will be for the newly created user.
+              ;; The effect of setting this is that someone could log in as an admin,
+              ;; create a new user, and then their cookie would be not for themselves
+              ;; but for the user that they just created.
+              (json-response true))
             (assoc (json-response false) :status 400) ;; don't want to leak any info useful to attackers, no keeping this very non-descript
             ))))
     (catch Exception e
