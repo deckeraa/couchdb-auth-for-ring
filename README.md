@@ -126,7 +126,7 @@ Note: Unnecessary use of -X or --request, POST is already inferred.
    :body (str "Hello " username ", only logged-in users can see this.")})
 ```
 
-Example cURL usage. Without the cookie issued via `login-handler`:
+Without the cookie issued via `login-handler`:
 ```
 curl -X POST localhost:3000/secret -H "Content-Type: application/json"'
 Not authorized
@@ -256,7 +256,7 @@ If wrap-cookies is not used, Ring will not send back cookies, even though the ha
 
 ### I recieve a 401 exception containing `{"error":"unauthorized","reason":"Name or password is incorrect."}` when trying to create a user.
 That means that the admin username or admin password being passed to CouchDB is incorrect.
-To fix this, first name sure that you set the environment variables:
+To fix this, first make sure that you set the environment variables:
 ```
 export COUCHDB_AUTH_FOR_RING_DB_USERNAME="YOUR_COUCHDB_ADMIN_USERNAME"
 export COUCHDB_AUTH_FOR_RING_DB_PASSWORD="YOUR_COUCHDB_ADMIN_PASSWORD"
