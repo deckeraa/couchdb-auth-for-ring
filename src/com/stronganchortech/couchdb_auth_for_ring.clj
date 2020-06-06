@@ -164,34 +164,35 @@
     (catch Exception e
       (json-response false))))
 
+(defn create-user [name password]
+  (if (nil? (re-find #"^\w+$" name)) ; sanitize the name
+    false
+    (let [resp (http/put
+                (str couch-url "/_users/org.couchdb.user:" name)
+                {:as :json
+                 :basic-auth [couch-username couch-password]
+                 :content-type :json
+                 :form-params {:name     name
+                               :password password
+                               :roles []
+                               :type :user}})]
+      (if (= 201 (:status resp))
+        (let [login-resp (http/post (str couch-url "/_session")
+                                    {:as :json
+                                     :content-type :json
+                                     :form-params {:name     name
+                                                   :password password}})]
+          true)
+        false))))
+
 (defn create-user-handler [req username roles]
   (try
     (let [params (get-body req)
-          name (:user params)]
-      (if (nil? (re-find #"^\w+$" name)) ; sanitize the name
-        (assoc (json-response :invalid-user-name) :status 400)
-        (let [resp (http/put
-                    (str couch-url "/_users/org.couchdb.user:" name)
-                    {:as :json
-                     :basic-auth [couch-username couch-password]
-                     :content-type :json
-                     :form-params {:name     name
-                                   :password (:pass params)
-                                   :roles []
-                                   :type :user}})]
-          (if (= 201 (:status resp))
-            (let [login-resp (http/post (str couch-url "/_session") {:as :json
-                                                                     :content-type :json
-                                                                     :form-params {:name     (:user params)
-                                                                                   :password (:pass params)}})]
-              ;; *Don't* set the CouchDB cookie on the ring response,
-              ;; since the cookie will be for the newly created user.
-              ;; The effect of setting this is that someone could log in as an admin,
-              ;; create a new user, and then their cookie would be not for themselves
-              ;; but for the user that they just created.
-              (json-response true))
-            (assoc (json-response false) :status 400) ;; don't want to leak any info useful to attackers, no keeping this very non-descript
-            ))))
+          name (:user params)
+          pass (:pass params)]
+      (if (create-user name pass)
+        (json-response true)
+        (assoc (json-response false) :status 400)))
     (catch Exception e
       (println "create-user-handler exception: " e)
       (assoc (json-response false) :status 400))))
