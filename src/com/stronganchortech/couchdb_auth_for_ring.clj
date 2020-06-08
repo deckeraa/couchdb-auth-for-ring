@@ -164,7 +164,7 @@
     (catch Exception e
       (json-response false))))
 
-(defn create-user [name password]
+(defn create-user [name password roles]
   (if (nil? (re-find #"^\w+$" name)) ; sanitize the name
     false
     (let [resp (http/put
@@ -174,7 +174,7 @@
                  :content-type :json
                  :form-params {:name     name
                                :password password
-                               :roles []
+                               :roles (or roles [])
                                :type :user}})]
       (if (= 201 (:status resp))
         (let [login-resp (http/post (str couch-url "/_session")
@@ -189,8 +189,9 @@
   (try
     (let [params (get-body req)
           name (:user params)
-          pass (:pass params)]
-      (if (create-user name pass)
+          pass (:pass params)
+          roles (or (:roles params) [])]
+      (if (create-user name pass roles)
         (json-response true)
         (assoc (json-response false) :status 400)))
     (catch Exception e
