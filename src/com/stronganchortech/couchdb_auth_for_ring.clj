@@ -164,34 +164,42 @@
     (catch Exception e
       (json-response false))))
 
-(defn create-user [name password roles]
-  (if (nil? (re-find #"^\w+$" name)) ; sanitize the name
-    false
-    (let [resp (http/put
-                (str couch-url "/_users/org.couchdb.user:" name)
-                {:as :json
-                 :basic-auth [couch-username couch-password]
-                 :content-type :json
-                 :form-params {:name     name
-                               :password password
-                               :roles (or roles [])
-                               :type :user}})]
-      (if (= 201 (:status resp))
-        (let [login-resp (http/post (str couch-url "/_session")
-                                    {:as :json
-                                     :content-type :json
-                                     :form-params {:name     name
-                                                   :password password}})]
-          true)
-        false))))
+(defn create-user
+  ([name password]
+   (create-user name password nil nil))
+  ([name password roles]
+   (create-user name password roles nil))
+  ([name password roles extra-info]
+   (if (nil? (re-find #"^\w+$" name)) ; sanitize the name
+     false
+     (let [resp (http/put
+                 (str couch-url "/_users/org.couchdb.user:" name)
+                 {:as :json
+                  :basic-auth [couch-username couch-password]
+                  :content-type :json
+                  :form-params (merge
+                                (or extra-info {})
+                                {:name     name
+                                 :password password
+                                 :roles (or roles [])
+                                 :type :user})})]
+       (if (= 201 (:status resp))
+         (let [login-resp (http/post (str couch-url "/_session")
+                                     {:as :json
+                                      :content-type :json
+                                      :form-params {:name     name
+                                                    :password password}})]
+           true)
+         false)))))
 
 (defn create-user-handler [req username roles]
   (try
     (let [params (get-body req)
-          name (:user params)
-          pass (:pass params)
-          roles (or (:roles params) [])]
-      (if (create-user name pass roles)
+          name  (:user params)
+          pass  (:pass params)
+          roles (:roles params)
+          extra-info (:extra-info params)]
+      (if (create-user name pass roles extra-info)
         (json-response true)
         (assoc (json-response false) :status 400)))
     (catch Exception e
