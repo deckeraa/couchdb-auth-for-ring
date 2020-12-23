@@ -7,10 +7,6 @@
             [ring.util.json-response :refer [json-response]]
             [clj-http.client :as http]))
 
-
-;; TODO before library release
-;; - change strict/secure settings
-
 (def couch-url (or (System/getenv "COUCHDB_AUTH_FOR_RING_DB_URL") "http://localhost:5984"))
 (def couch-username (System/getenv "COUCHDB_AUTH_FOR_RING_DB_USERNAME"))
 (def couch-password (System/getenv "COUCHDB_AUTH_FOR_RING_DB_PASSWORD"))
@@ -170,7 +166,8 @@
   ([name password roles]
    (create-user name password roles nil))
   ([name password roles extra-info]
-   (if (nil? (re-find #"^\w+$" name)) ; sanitize the name
+   (if (or (nil? name)
+           (nil? (re-find #"^\w+$" name))) ; sanitize the name
      false
      (let [resp (http/put
                  (str couch-url "/_users/org.couchdb.user:" name)
@@ -183,14 +180,7 @@
                                  :password password
                                  :roles (or roles [])
                                  :type :user})})]
-       (if (= 201 (:status resp))
-         (let [login-resp (http/post (str couch-url "/_session")
-                                     {:as :json
-                                      :content-type :json
-                                      :form-params {:name     name
-                                                    :password password}})]
-           true)
-         false)))))
+       (= 201 (:status resp))))))
 
 (defn create-user-handler [req username roles]
   (try
