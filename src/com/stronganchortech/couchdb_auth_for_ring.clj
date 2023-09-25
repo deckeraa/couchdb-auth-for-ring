@@ -5,7 +5,11 @@
             [ring.util.request :as request]
             [ring.util.response :as response]
             [ring.util.json-response :refer [json-response]]
-            [clj-http.client :as http]))
+            [clj-http.client :as http])
+  (:import
+   (java.util Base64)
+   (javax.crypto Mac)
+   (javax.crypto.spec SecretKeySpec)))
 
 (def couch-url (or (System/getenv "COUCHDB_AUTH_FOR_RING_DB_URL") "http://localhost:5984"))
 (def couch-username (System/getenv "COUCHDB_AUTH_FOR_RING_DB_USERNAME"))
@@ -151,14 +155,52 @@
   (try
     (let [params (get-body req)
           resp (http/post (str couch-url "/_session") {:as :json
-                                                    :content-type :json
-                                                    :form-params {:name     (:user params)
-                                                                  :password (:pass params)}})]
+                                                       :content-type :json
+                                                       :form-params {:name     (:user params)
+                                                                     :password (:pass params)}})]
       (assoc 
        (json-response {:name (get-in resp [:body :name]) :roles (get-in resp [:body :roles])})
        :cookies (process-cookies (:cookies resp))))
     (catch Exception e
       (json-response false))))
+
+(defn proxy-login-handler [secret username comma-delimited-roles]
+  (println "proxy-login-handler" secret username comma-delimited-roles)
+  (try
+    (let [secret-bytes (.getBytes secret)
+          _ (println (type secret-bytes) secret-bytes)
+          mac (doto (Mac/getInstance "HmacSHA256") (.init (SecretKeySpec. secret-bytes "HmacSHA256")))
+          hash (.doFinal mac (.getBytes "foo" "UTF-8"))
+          _ (println "hash: " hash (.toString hash))
+          encoded-hash (.. (Base64/getUrlEncoder) withoutPadding (encodeToString hash))
+          _ (println "encoded-hash: " encoded-hash)
+          params {:headers {:X-Auth-CouchDB-UserName username
+                            :X-Auth-CouchDB-Roles comma-delimited-roles
+                            :X-Auth-CouchDB-Token encoded-hash}
+                  :accept :json
+                  :content-type :json
+}
+          _ (println "params: " params)
+          resp (http/get (str couch-url "/_session") params)]
+      (println "resp: " resp)
+      (assoc 
+       (json-response {:name (get-in resp [:body :name]) :roles (get-in resp [:body :roles])})
+       :cookies (process-cookies (:cookies resp))))
+    (catch Exception e
+      (println "Caught exception: " e)
+      (json-response false)))
+  ;; (try
+  ;;   (let [params (get-body req)
+  ;;         resp (http/post (str couch-url "/_session") {:as :json
+  ;;                                                      :content-type :json
+  ;;                                                      :form-params {:name     (:user params)
+  ;;                                                                    :password (:pass params)}})]
+  ;;     (assoc 
+  ;;      (json-response {:name (get-in resp [:body :name]) :roles (get-in resp [:body :roles])})
+  ;;      :cookies (process-cookies (:cookies resp))))
+  ;;   (catch Exception e
+  ;;     (json-response false)))
+  )
 
 (defn create-user
   ([name password]
