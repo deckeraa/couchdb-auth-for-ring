@@ -14,6 +14,7 @@
 (def couch-url (or (System/getenv "COUCHDB_AUTH_FOR_RING_DB_URL") "http://localhost:5984"))
 (def couch-username (System/getenv "COUCHDB_AUTH_FOR_RING_DB_USERNAME"))
 (def couch-password (System/getenv "COUCHDB_AUTH_FOR_RING_DB_PASSWORD"))
+(def couch-secret (System/getenv "COUCHDB_AUTH_FOR_RING_COUCH_SECRET"))
 
 ;; use secure (i.e. cookies only get sent over https by default
 ;; I considered whether this was overly burdensome on the dev experience since tools like Figwheel
@@ -148,6 +149,46 @@
                roles    (get-in cookie-check-val [0 :roles])]
            (handler req username roles)))))))
 
+;; https://stackoverflow.com/questions/32292183/is-there-any-way-to-programmatically-generate-a-couchdb-cookie
+;; def generate_couchdb_cookie(couchAddress, couchSecret, username):
+
+;;     timestamp = format(int(time.time()), 'X')
+;;     data      = username + ":" + timestamp
+
+;;     server    = pycouchdb.Server(couchAddress)
+;;     db        = server.database("_users")
+;;     doc       = db.get("org.couchdb.user:" + username)
+;;     salt      = doc["salt"]
+;;     secret    = couchSecret + salt
+
+;;     hashed    = hmac.new(secret.encode(), data.encode(), hashlib.sha1).digest()
+;;     inbytes   = data.encode() + ":".encode() + hashed
+;;     result    = base64.urlsafe_b64encode(inbytes)
+
+;;     return "AuthSession=" + (result.decode("utf-8")).rstrip('=')
+
+(defn current-time-as-hex []
+  (let [current-time (System/currentTimeMillis)]
+    (Long/toString current-time 16)))
+
+(defn create-couchdb-cookie [username]
+  (when-not couch-secret
+    (println "COUCHDB_AUTH_FOR_RING_COUCH_SECRET is not set. Set it to the value in couch_httpd_auth/secret"))
+  (let [timestamp (current-time-as-hex)
+        data (str username ":" timestamp)
+        mac (doto (Mac/getInstance "HmacSHA1")
+              (.init (SecretKeySpec. (.getBytes couch-secret) "HmacSHA1")))
+        hash (.doFinal mac (.getBytes data "UTF-8"))
+        encoded-hash (.. (Base64/getUrlEncoder) withoutPadding (encodeToString hash))]
+    (println (str "AuthSession=" encoded-hash))
+    (process-cookies
+     {"AuthSession" {:discard false,
+                     ;; :expires #inst "2020-04-21T19:51:08.000-00:00",
+                     :path "/",
+                     :secure false,
+                     :value encoded-hash,
+                     }})))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Ring Handlers
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -162,6 +203,14 @@
        (json-response {:name (get-in resp [:body :name]) :roles (get-in resp [:body :roles])})
        :cookies (process-cookies (:cookies resp))))
     (catch Exception e
+      (json-response false))))
+
+(defn proxy-cookie-handler [username]
+  (try
+    (let [cookie (create-couchdb-cookie username)]
+      {:status 200 :cookies cookie})
+    (catch Exception e
+      (println "Caught exception: " e)
       (json-response false))))
 
 (defn proxy-login-handler [secret username comma-delimited-roles]
