@@ -149,44 +149,37 @@
                roles    (get-in cookie-check-val [0 :roles])]
            (handler req username roles)))))))
 
-;; https://stackoverflow.com/questions/32292183/is-there-any-way-to-programmatically-generate-a-couchdb-cookie
-;; def generate_couchdb_cookie(couchAddress, couchSecret, username):
-
-;;     timestamp = format(int(time.time()), 'X')
-;;     data      = username + ":" + timestamp
-
-;;     server    = pycouchdb.Server(couchAddress)
-;;     db        = server.database("_users")
-;;     doc       = db.get("org.couchdb.user:" + username)
-;;     salt      = doc["salt"]
-;;     secret    = couchSecret + salt
-
-;;     hashed    = hmac.new(secret.encode(), data.encode(), hashlib.sha1).digest()
-;;     inbytes   = data.encode() + ":".encode() + hashed
-;;     result    = base64.urlsafe_b64encode(inbytes)
-
-;;     return "AuthSession=" + (result.decode("utf-8")).rstrip('=')
-
-(defn current-time-as-hex []
-  (let [current-time (System/currentTimeMillis)]
+(defn- current-time-as-hex []
+  (let [current-time (Math/floor (/ (System/currentTimeMillis) 1000))]
     (Long/toString current-time 16)))
 
-(defn create-couchdb-cookie [username]
+(defn- encode [v]
+  (.. (Base64/getUrlEncoder) withoutPadding (encodeToString v)))
+
+(defn- hmac-hash [secret v]
+  (let [mac (doto (Mac/getInstance "HmacSHA1")
+              (.init (SecretKeySpec. (.getBytes secret) "HmacSHA1")))
+        hashed-value (.doFinal mac (.getBytes v "UTF-8"))]
+    hashed-value))
+
+(defn create-couchdb-cookie
+  "Mints a valid CouchDB cookie for the given user.
+  https://github.com/apache/couchdb-couch/blob/f02f5f94a727fc2b2d080afae49c9392581090aa/src/couch_httpd_auth.erl#L266"
+  [username]
   (when-not couch-secret
     (println "COUCHDB_AUTH_FOR_RING_COUCH_SECRET is not set. Set it to the value in couch_httpd_auth/secret"))
   (let [timestamp (current-time-as-hex)
         data (str username ":" timestamp)
-        mac (doto (Mac/getInstance "HmacSHA1")
-              (.init (SecretKeySpec. (.getBytes couch-secret) "HmacSHA1")))
-        hash (.doFinal mac (.getBytes data "UTF-8"))
-        encoded-hash (.. (Base64/getUrlEncoder) withoutPadding (encodeToString hash))]
-    (println (str "AuthSession=" encoded-hash))
+        encoded (encode (byte-array (concat (.getBytes data)
+                                            (.getBytes ":")
+                                            (hmac-hash couch-secret data))))]
+    (println (str "AuthSession=" encoded))
     (process-cookies
      {"AuthSession" {:discard false,
                      ;; :expires #inst "2020-04-21T19:51:08.000-00:00",
                      :path "/",
                      :secure false,
-                     :value encoded-hash,
+                     :value encoded,
                      }})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
